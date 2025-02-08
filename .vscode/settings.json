@@ -1,0 +1,7 @@
+{
+  "rubyLsp.linters": "standard",
+  "[ruby]": {
+    "editor.defaultFormatter": "testdouble.vscode-standard-ruby",
+    "editor.formatOnSave": true
+  }
+}
