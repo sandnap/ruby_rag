@@ -1,6 +1,7 @@
 require_relative "PageScraper"
 require_relative "ContentChunker"
 require_relative "ChunkEmbedder"
+require_relative "ContentOptimizer"
 
 class RagService
   def initialize(url, link_filter = nil, content_start_pattern = nil, content_end_pattern = nil)
@@ -8,6 +9,7 @@ class RagService
     @link_filter = link_filter
     @content_start_pattern = content_start_pattern
     @content_end_pattern = content_end_pattern
+    @optimizer = ContentOptimizer.new
     setup_knowledge_base(url)
   end
 
@@ -30,7 +32,10 @@ class RagService
     @chunks = []
 
     if result[:content]
-      @chunks = chunker.chunk(result[:content])
+      # Optimize content before chunking
+      puts "Optimizing main page content..."
+      optimized_content = @optimizer.optimize(result[:content])
+      @chunks = chunker.chunk(optimized_content)
       puts "Found content in main page, extracted #{@chunks.length} chunks"
     else
       puts "No matching content found in main page"
@@ -46,7 +51,9 @@ class RagService
       link_result = link_scraper.scrape
 
       if link_result[:content]
-        new_chunks = chunker.chunk(link_result[:content])
+        puts "Optimizing linked page content..."
+        optimized_content = @optimizer.optimize(link_result[:content])
+        new_chunks = chunker.chunk(optimized_content)
         @chunks.concat(new_chunks)
         processed_count += 1
         puts "Found content, extracted #{new_chunks.length} chunks"
