@@ -5,9 +5,11 @@ require "net/http"
 require "voyageai"
 
 class PageScraper
-  def initialize(url, link_filter = nil)
+  def initialize(url, link_filter = nil, content_start_pattern = nil, content_end_pattern = nil)
     @url = url
     @link_filter = link_filter
+    @content_start_pattern = content_start_pattern
+    @content_end_pattern = content_end_pattern
   end
 
   def scrape
@@ -25,8 +27,25 @@ class PageScraper
   end
 
   def extract_content(doc)
-    main_content = doc.at_xpath("//main")&.inner_html || doc.at_css("body").inner_html
     title = doc.at_css("title")&.inner_html || ""
+
+    if @content_start_pattern && @content_end_pattern
+      # Get the raw HTML as a string
+      content = doc.to_html
+
+      # Create a regex that matches everything between start and end patterns
+      pattern = /#{@content_start_pattern}(.*?)#{@content_end_pattern}/m
+
+      if (match = content.match(pattern))
+        main_content = match[1].strip
+      else
+        puts "Warning: Content patterns not found in page with title: #{title}"
+        return nil
+      end
+    else
+      main_content = doc.at_xpath("//main")&.inner_html || doc.at_css("body").inner_html
+    end
+
     "Title: #{title}\n\nContent: #{main_content}"
   end
 

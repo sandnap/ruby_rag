@@ -3,9 +3,11 @@ require_relative "ContentChunker"
 require_relative "ChunkEmbedder"
 
 class RagService
-  def initialize(url, link_filter = nil)
+  def initialize(url, link_filter = nil, content_start_pattern = nil, content_end_pattern = nil)
     @url = url
     @link_filter = link_filter
+    @content_start_pattern = content_start_pattern
+    @content_end_pattern = content_end_pattern
     setup_knowledge_base(url)
   end
 
@@ -20,42 +22,66 @@ class RagService
 
   def setup_knowledge_base(url)
     # Extract content and links from the URL
-    scraper = PageScraper.new(url, @link_filter)
+    scraper = PageScraper.new(url, @link_filter, @content_start_pattern, @content_end_pattern)
     result = scraper.scrape
 
     # Process the main content
     chunker = ContentChunker.new
-    @chunks = chunker.chunk(result[:content])
+    @chunks = []
 
-    # puts "Links: #{result[:links]}"
-
-    # Process linked pages, only going 1 level deep
-    result[:links][1..2].each do |link|
-      puts "Link: #{link}"
-      link_scraper = PageScraper.new(link, @link_filter)
-      link_result = link_scraper.scrape
-      @chunks.concat(chunker.chunk(link_result[:content]))
-    rescue => e
-      puts "Error processing link #{link}: #{e.message}"
+    if result[:content]
+      @chunks = chunker.chunk(result[:content])
+      puts "Found content in main page, extracted #{@chunks.length} chunks"
+    else
+      puts "No matching content found in main page"
     end
 
-    puts "Chunks: #{@chunks.length}"
-    puts "Tokens: #{@chunks.map(&:length).sum}"
+    # Process linked pages, only going 1 level deep
+    processed_count = 0
+    skipped_count = 0
+
+    result[:links][1..2].each do |link|
+      puts "\nProcessing: #{link}"
+      link_scraper = PageScraper.new(link, @link_filter, @content_start_pattern, @content_end_pattern)
+      link_result = link_scraper.scrape
+
+      if link_result[:content]
+        new_chunks = chunker.chunk(link_result[:content])
+        @chunks.concat(new_chunks)
+        processed_count += 1
+        puts "Found content, extracted #{new_chunks.length} chunks"
+      else
+        skipped_count += 1
+        puts "No matching content found"
+      end
+    rescue => e
+      skipped_count += 1
+      puts "Error processing #{link}: #{e.message}"
+    end
+
+    puts "\nProcessing Summary:"
+    puts "Total pages processed successfully: #{processed_count + (@chunks.empty? ? 0 : 1)}"
+    puts "Pages skipped/errored: #{skipped_count}"
+    puts "Total chunks extracted: #{@chunks.length}"
+    puts "Total characters: #{@chunks.map(&:length).sum}"
+
+    return if @chunks.empty?
+
+    # Save sample chunks
     c = File.open("chunks.txt", "w")
-    0..9.times do |i|
-      # The "a" flag opens the file in append mode, adding content to the end rather than overwriting
-      c.puts "Chunk #{i}: #{@chunks[i]}"
+    @chunks[0..9].each_with_index do |chunk, i|
+      c.puts "Chunk #{i}: #{chunk}"
     end
 
     # Create embeddings
     embedder = ChunkEmbedder.new
-    # @text_embeddings = embedder.embed_chunks(@chunks)
     @text_embeddings = embedder.embed_chunks(@chunks[0..9])
-    puts "Text embeddings: #{@text_embeddings.length}"
+    puts "Text embeddings created: #{@text_embeddings.length}"
+
+    # Save sample embeddings
     e = File.open("text_embeddings.txt", "w")
-    0..9.times do |i|
-      # The "a" flag opens the file in append mode, adding content to the end rather than overwriting
-      e.puts "Chunk #{i}: #{@text_embeddings[i]}"
+    @text_embeddings[0..9].each_with_index do |embedding, i|
+      e.puts "Chunk #{i}: #{embedding}"
     end
   end
 
@@ -108,16 +134,19 @@ end
 # __FILE__ contains the name of the current file
 # So this conditional only runs the code below when this file is run directly
 if __FILE__ == $PROGRAM_NAME
-  if ARGV.empty? || ARGV.length > 2
-    puts "Usage: bundle exec ruby RagService.rb <sitemap_url> [link_filter]"
-    puts "Example: bundle exec ruby RagService.rb https://flowbite.com/docs/sitemap.xml 'getting-started'"
-    puts "Example with regex: bundle exec ruby RagService.rb https://flowbite.com/docs/sitemap.xml '^/docs/getting-started'"
+  if ARGV.empty? || ARGV.length > 4
+    puts "Usage: bundle exec ruby RagService.rb <url> [link_filter] [content_start_pattern] [content_end_pattern]"
+    puts "Example: bundle exec ruby RagService.rb https://example.com 'docs' '<main>' '</main>'"
+    puts "Example with regex: bundle exec ruby RagService.rb https://example.com '^/docs' '## Overview' '## Installation'"
     exit 1
   end
 
   url = ARGV[0]
   link_filter = ARGV[1] if ARGV[1]
-  rag_service = RagService.new(url, link_filter)
+  content_start_pattern = ARGV[2] if ARGV[2]
+  content_end_pattern = ARGV[3] if ARGV[3]
+
+  rag_service = RagService.new(url, link_filter, content_start_pattern, content_end_pattern)
   # Uncomment to use:
   # answer = rag_service.call("Your question here")
   # puts answer
