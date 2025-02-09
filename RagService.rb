@@ -2,14 +2,17 @@ require_relative "PageScraper"
 require_relative "ContentChunker"
 require_relative "ChunkEmbedder"
 require_relative "ContentOptimizer"
+require_relative "QdrantStore"
 
 class RagService
-  def initialize(url, link_filter = nil, content_start_pattern = nil, content_end_pattern = nil)
+  def initialize(url, collection_name, link_filter = nil, content_start_pattern = nil, content_end_pattern = nil)
     @url = url
+    @collection_name = collection_name
     @link_filter = link_filter
     @content_start_pattern = content_start_pattern
     @content_end_pattern = content_end_pattern
     @optimizer = ContentOptimizer.new
+    @store = QdrantStore.new(collection_name)
     setup_knowledge_base(url)
   end
 
@@ -45,7 +48,7 @@ class RagService
     processed_count = 0
     skipped_count = 0
 
-    result[:links][1..1].each do |link|
+    result[:links][1..20].each do |link|
       puts "\nProcessing: #{link}"
       link_scraper = PageScraper.new(link, @link_filter, @content_start_pattern, @content_end_pattern)
       link_result = link_scraper.scrape
@@ -74,22 +77,15 @@ class RagService
 
     return if @chunks.empty?
 
-    # Save sample chunks
-    c = File.open("chunks.txt", "w")
-    @chunks[0..9].each_with_index do |chunk, i|
-      c.puts "Chunk #{i}: #{chunk}"
-    end
-
     # Create embeddings
     embedder = ChunkEmbedder.new
-    @text_embeddings = embedder.embed_chunks(@chunks[0..9])
+    @text_embeddings = embedder.embed_chunks(@chunks)
     puts "Text embeddings created: #{@text_embeddings.length}"
 
-    # Save sample embeddings
-    e = File.open("text_embeddings.txt", "w")
-    @text_embeddings[0..9].each_with_index do |embedding, i|
-      e.puts "Chunk #{i}: #{embedding}"
-    end
+    # Store in Qdrant
+    puts "Storing embeddings in Qdrant collection '#{@collection_name}'..."
+    @store.store_embeddings(@chunks, @text_embeddings, @url)
+    puts "Embeddings stored successfully!"
   end
 
   def create_index
@@ -141,19 +137,20 @@ end
 # __FILE__ contains the name of the current file
 # So this conditional only runs the code below when this file is run directly
 if __FILE__ == $PROGRAM_NAME
-  if ARGV.empty? || ARGV.length > 4
-    puts "Usage: bundle exec ruby RagService.rb <url> [link_filter] [content_start_pattern] [content_end_pattern]"
-    puts "Example: bundle exec ruby RagService.rb https://example.com 'docs' '<main>' '</main>'"
-    puts "Example with regex: bundle exec ruby RagService.rb https://example.com '^/docs' '## Overview' '## Installation'"
+  if ARGV.empty? || ARGV.length > 5
+    puts "Usage: bundle exec ruby RagService.rb <url> <collection_name> [link_filter] [content_start_pattern] [content_end_pattern]"
+    puts "Example: bundle exec ruby RagService.rb https://example.com my_collection 'docs' '<main>' '</main>'"
+    puts "Example with regex: bundle exec ruby RagService.rb https://example.com docs_collection '^/docs' '## Overview' '## Installation'"
     exit 1
   end
 
   url = ARGV[0]
-  link_filter = ARGV[1] if ARGV[1]
-  content_start_pattern = ARGV[2] if ARGV[2]
-  content_end_pattern = ARGV[3] if ARGV[3]
+  collection_name = ARGV[1]
+  link_filter = ARGV[2] if ARGV[2]
+  content_start_pattern = ARGV[3] if ARGV[3]
+  content_end_pattern = ARGV[4] if ARGV[4]
 
-  rag_service = RagService.new(url, link_filter, content_start_pattern, content_end_pattern)
+  rag_service = RagService.new(url, collection_name, link_filter, content_start_pattern, content_end_pattern)
   # Uncomment to use:
   # answer = rag_service.call("Your question here")
   # puts answer

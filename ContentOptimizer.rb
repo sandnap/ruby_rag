@@ -23,9 +23,7 @@ class ContentOptimizer
     end
 
     # Combine the results
-    combined = results.join("\n\n")
-    File.write("combined.md", combined)
-    combined
+    results.join("\n\n")
   end
 
   private
