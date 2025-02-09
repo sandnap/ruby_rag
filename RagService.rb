@@ -33,13 +33,21 @@ class RagService
     # Process the main content
     chunker = ContentChunker.new
     @chunks = []
+    @chunk_metadata = []  # Store metadata for each chunk
 
     if result[:content]
       # Optimize content before chunking
       puts "Optimizing main page content..."
       optimized_content = @optimizer.optimize(result[:content])
-      @chunks = chunker.chunk(optimized_content)
-      puts "Found content in main page, extracted #{@chunks.length} chunks"
+      page_chunks = chunker.chunk(optimized_content)
+
+      # Add chunks with metadata
+      page_chunks.each_with_index do |chunk, index|
+        @chunks << chunk
+        @chunk_metadata << {url: url, chunk_number: index}
+      end
+
+      puts "Found content in main page, extracted #{page_chunks.length} chunks"
     else
       puts "No matching content found in main page"
     end
@@ -48,7 +56,7 @@ class RagService
     processed_count = 0
     skipped_count = 0
 
-    result[:links][1..5].each do |link|
+    result[:links][1..2].each do |link|
       puts "\nProcessing: #{link}"
       link_scraper = PageScraper.new(link, @link_filter, @content_start_pattern, @content_end_pattern)
       link_result = link_scraper.scrape
@@ -56,10 +64,16 @@ class RagService
       if link_result[:content]
         puts "Optimizing linked page content..."
         optimized_content = @optimizer.optimize(link_result[:content])
-        new_chunks = chunker.chunk(optimized_content)
-        @chunks.concat(new_chunks)
+        page_chunks = chunker.chunk(optimized_content)
+
+        # Add chunks with metadata
+        page_chunks.each_with_index do |chunk, index|
+          @chunks << chunk
+          @chunk_metadata << {url: link, chunk_number: index}
+        end
+
         processed_count += 1
-        puts "Found content, extracted #{new_chunks.length} chunks"
+        puts "Found content, extracted #{page_chunks.length} chunks"
       else
         skipped_count += 1
         puts "No matching content found"
@@ -84,7 +98,7 @@ class RagService
 
     # Store in Qdrant
     puts "Storing embeddings in Qdrant collection '#{@collection_name}'..."
-    @store.store_embeddings(@chunks, @text_embeddings, @url)
+    @store.store_embeddings(@chunks, @text_embeddings, @chunk_metadata)
     puts "Embeddings stored successfully!"
   end
 

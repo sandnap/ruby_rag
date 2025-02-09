@@ -12,8 +12,9 @@ class QdrantStore
     ensure_collection_exists
   end
 
-  def store_embeddings(chunks, embeddings, url)
+  def store_embeddings(chunks, embeddings, chunk_metadata)
     raise "Number of chunks and embeddings must match" unless chunks.length == embeddings.length
+    raise "Number of chunks and metadata must match" unless chunks.length == chunk_metadata.length
 
     # Verify first embedding
     if embeddings.first
@@ -22,7 +23,7 @@ class QdrantStore
       puts "Sample values: #{embeddings.first.take(5).inspect}"
     end
 
-    points = chunks.zip(embeddings).map.with_index do |(chunk, embedding), id|
+    points = chunks.zip(embeddings, chunk_metadata).map.with_index do |(chunk, embedding, metadata), id|
       # Ensure all vector values are proper floats
       vector = embedding.map { |v| v.to_f }
 
@@ -31,16 +32,19 @@ class QdrantStore
         vector: vector,
         payload: {
           content: chunk,
-          url: url
+          url: metadata[:url],
+          chunk_number: metadata[:chunk_number]
         }
       }
     end
 
-    # Verify first point's vector
+    # Verify first point
     if points.first
       puts "\nFirst point verification:"
       puts "Vector dimensions: #{points.first[:vector].length}"
       puts "Sample vector values: #{points.first[:vector].take(5).inspect}"
+      puts "URL: #{points.first[:payload][:url]}"
+      puts "Chunk number: #{points.first[:payload][:chunk_number]}"
     end
 
     @client.points.upsert(
