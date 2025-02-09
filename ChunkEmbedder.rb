@@ -20,10 +20,22 @@ class ChunkEmbedder
         batch,
         model: "voyage-code-3"
       )
-      embeddings.concat(embed.embeddings)
+
+      # Verify embeddings are non-zero
+      batch_embeddings = embed.embeddings
+      if batch_embeddings.first
+        puts "Sample values from first embedding in batch:"
+        puts batch_embeddings.first.take(5).inspect
+      end
+
+      embeddings.concat(batch_embeddings)
     end
 
     puts "Created #{embeddings.length} embeddings"
+    puts "First embedding dimensions: #{embeddings.first.length}"
+    puts "Sample values from final first embedding:"
+    puts embeddings.first.take(5).inspect
+
     embeddings
   end
 end

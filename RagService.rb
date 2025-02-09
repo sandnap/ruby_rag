@@ -48,7 +48,7 @@ class RagService
     processed_count = 0
     skipped_count = 0
 
-    result[:links][1..20].each do |link|
+    result[:links][1..5].each do |link|
       puts "\nProcessing: #{link}"
       link_scraper = PageScraper.new(link, @link_filter, @content_start_pattern, @content_end_pattern)
       link_result = link_scraper.scrape
