@@ -16,13 +16,6 @@ class RagService
     setup_knowledge_base(url)
   end
 
-  def call(question)
-    # Ignore this for now
-    # search_similar_chunks(question)
-    prompt = build_prompt(question)
-    run_completion(prompt)
-  end
-
   private
 
   def setup_knowledge_base(url)
@@ -101,49 +94,6 @@ class RagService
     @store.store_embeddings(@chunks, @text_embeddings, @chunk_metadata)
     puts "Embeddings stored successfully!"
   end
-
-  def create_index
-    # Ignore this for now
-    d = @text_embeddings.shape[1]
-    @index = Faiss::IndexFlatL2.new(d)
-    @index.add(@text_embeddings)
-  end
-
-  def search_similar_chunks(question, k = 2)
-    # Ignore this for now
-    # Ensure index exists before searching
-    # raise "No index available. Please load and process text first." if @index.nil?
-
-    # question_embedding = get_text_embedding(question)
-    # distances, indices = @index.search([question_embedding], k)
-    # index_array = indices.to_a[0]
-    # @retrieved_chunks = index_array.map { |i| @chunks[i] }
-  end
-
-  def build_prompt(question)
-    # Ignore this for now
-    <<-PROMPT
-    Context information is below.
-    ---------------------
-    #{@retrieved_chunks.join("\n---------------------\n")}
-    ---------------------
-    Given the context information and not prior knowledge, answer the query.
-    Query: #{question}
-    Answer:
-    PROMPT
-  end
-
-  def run_completion(user_message, model: "gpt-3.5-turbo")
-    # Ignore this for now
-    response = @client.chat(
-      parameters: {
-        model: model,
-        messages: [{role: "user", content: user_message}],
-        temperature: 0.0
-      }
-    )
-    response.dig("choices", 0, "message", "content")
-  end
 end
 
 # This line checks if the current file is being run directly (not imported as a module)
@@ -164,8 +114,5 @@ if __FILE__ == $PROGRAM_NAME
   content_start_pattern = ARGV[3] if ARGV[3]
   content_end_pattern = ARGV[4] if ARGV[4]
 
-  rag_service = RagService.new(url, collection_name, link_filter, content_start_pattern, content_end_pattern)
-  # Uncomment to use:
-  # answer = rag_service.call("Your question here")
-  # puts answer
+  RagService.new(url, collection_name, link_filter, content_start_pattern, content_end_pattern)
 end
